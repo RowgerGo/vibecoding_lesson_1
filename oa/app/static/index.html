@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#172c41">
+  <title>行知 OA · 协作有序，工作从容</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div id="toast" role="alert" hidden></div>
+  <section id="login-view" hidden>
+    <div class="login-story">
+      <div class="brand"><span class="brand-icon">行</span><span>行知 <b>OA</b></span></div>
+      <div><p class="eyebrow">WORK TOGETHER, BETTER.</p><h1>让每一份申请，<br>都有清晰的回应。</h1><p>部门协作、申请流转、审批记录。<br>把日常工作，安排得井井有条。</p></div>
+      <span class="login-foot">行知办公协作系统 · 本地部署</span>
+    </div>
+    <div class="login-panel"><form id="login-form" class="login-card">
+      <p class="eyebrow">欢迎回来</p><h2>登录工作空间</h2><p class="muted">使用管理员分配的账号继续工作</p>
+      <label>用户名<input name="username" autocomplete="username" required maxlength="40" placeholder="请输入用户名"></label>
+      <label>密码<input name="password" type="password" autocomplete="current-password" required maxlength="128" placeholder="请输入密码"></label>
+      <button type="submit" class="primary wide">登录 →</button>
+      <p id="login-error" class="form-error" role="alert"></p>
+      <p class="login-help">还没有账号或忘记密码？请联系系统管理员。</p>
+    </form></div>
+  </section>
+  <div id="workspace" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#overview"><span class="brand-icon">行</span><span>行知 <b>OA</b></span></a>
+      <p class="nav-caption">工作空间</p><nav id="nav" aria-label="主导航"></nav>
+      <div class="sidebar-bottom"><span class="live-dot"></span> 让协作更有序<p>一份申请，一次清晰的流转。</p></div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar"><span id="breadcrumb">工作空间 / 工作台</span><div class="profile"><span id="profile-avatar" class="avatar"></span><div><strong id="profile-name"></strong><small id="profile-role"></small></div><button id="logout" class="text-button">退出登录</button></div></header>
+      <main id="main" tabindex="-1"></main>
+      <footer>行知 OA <span>·</span> 简单协作，专注工作</footer>
+    </div>
+  </div>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-heading"><h2 id="modal-title"></h2><button id="modal-close" class="icon-button" aria-label="关闭弹窗">×</button></div><div id="modal-body"></div></dialog>
+</body>
+</html>
