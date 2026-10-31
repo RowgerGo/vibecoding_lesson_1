@@ -58,6 +58,26 @@ def test_csrf_and_cross_origin_protection(world):
     assert actor.post("/departments", json={"name": "同源"}, headers={"Origin": "http://testserver"}).status_code == 201
 
 
+def test_same_host_origin_without_non_default_port_is_allowed(world):
+    with TestClient(world["app"], base_url="http://testserver:8000") as client:
+        login = client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD})
+        assert login.status_code == 200
+        client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
+        response = client.post("/api/departments", json={"name": "省略端口同源"}, headers={"Origin": "http://testserver"})
+        assert response.status_code == 201
+        assert client.post("/api/departments", json={"name": "错误端口"}, headers={"Origin": "http://testserver:9000"}).status_code == 403
+
+
+def test_configured_public_origin_allows_https_proxy_origin(world, monkeypatch):
+    monkeypatch.setenv("OA_PUBLIC_ORIGIN", "https://oa.example.test")
+    with TestClient(world["app"], base_url="http://container:8000") as client:
+        login = client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD})
+        assert login.status_code == 200
+        client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
+        assert client.post("/api/departments", json={"name": "代理同源"}, headers={"Origin": "https://oa.example.test"}).status_code == 201
+        assert client.post("/api/departments", json={"name": "错误来源"}, headers={"Origin": "https://evil.example"}).status_code == 403
+
+
 @pytest.mark.parametrize("username", ["user", "sales_head", "finance_head"])
 def test_admin_apis_are_protected(world, username):
     actor = world["actor"](username)
