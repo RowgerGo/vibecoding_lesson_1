@@ -55,7 +55,7 @@ def env(tmp_path):
                 if username:
                     login = c.post("/api/auth/login", json={"username":username,"password":PASSWORD})
                     assert login.status_code == 200, login.text
-                    c.headers["X-CSRF-Token"] = login.json()["csrf"]
+                    c.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
                 clients[key] = c
             return clients[key]
 

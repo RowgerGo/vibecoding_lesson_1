@@ -54,13 +54,11 @@ def test_registration_uniqueness_and_rollback(env):
 def test_login_logout_csrf_and_fixed_role(env):
     c = env.client("seeker")
     assert c.get("/api/auth/me").json()["role"] == "seeker"
-    cookie = c.cookies.get("bl_session")
-    assert c.post("/api/auth/logout", headers={"X-CSRF-Token":"wrong"}).status_code == 403
+    assert c.cookies.get("bl_session") is None
+    assert c.post("/api/auth/logout", headers={"Authorization":"Bearer invalid-token"}).status_code == 401
     assert c.post("/api/auth/logout", headers={"Origin":"https://evil.invalid"}).status_code == 403
     assert c.patch("/api/auth/me", json={"role":"admin"}).status_code == 405
     assert c.post("/api/auth/logout").status_code == 200
-    assert c.get("/api/auth/me").status_code == 401
-    c.cookies.set("bl_session", cookie)
     assert c.get("/api/auth/me").status_code == 401
     assert c.post("/api/auth/login", json={"username":"seeker","password":"incorrect"}).status_code == 401
     assert env.client().post("/api/auth/login", json={"username":"seeker","password":PASSWORD}, headers={"Origin":"http://testserver.evil.invalid"}).status_code == 403
@@ -249,7 +247,7 @@ def test_seven_day_expiry_exact_boundary_and_reissue(env):
     c = env.client("company")
     assert c.get("/api/auth/me").status_code == 401
     logged = c.post("/api/auth/login",json={"username":"company","password":PASSWORD}).json()
-    c.headers["X-CSRF-Token"] = logged["csrf"]
+    c.headers["Authorization"] = f"Bearer {logged['access_token']}"
     new = c.post(f"/api/company/applications/{aid}/invitation").json()
     assert new["token"] != invite["token"]
     assert public.post(f"/api/invitations/{invite['token']}/appointments",json=booking()).status_code == 409
@@ -303,6 +301,7 @@ def test_restart_persistence_missing_file_and_database_constraints(env):
     with TestClient(restarted) as c:
         r = c.post("/api/auth/login", json={"username":"company","password":PASSWORD})
         assert r.status_code == 200
+        c.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
         assert c.get("/api/company/jobs").json()[0]["id"] == env.job
         assert len(c.get("/api/company/appointments").json()) == 1
         assert c.get(f"/api/company/applications/{aid}/resume").status_code == 200

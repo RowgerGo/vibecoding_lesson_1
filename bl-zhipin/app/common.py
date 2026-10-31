@@ -71,8 +71,18 @@ def now(request):
     return request.app.state.clock().timestamp()
 
 
+def request_token(request: Request, required=True):
+    authorization = request.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        if required:
+            fail("请先登录", 401)
+        return ""
+    return token.strip()
+
+
 def current_user(request: Request, role=None, write=False):
-    token = request.cookies.get("bl_session", "")
+    token = request_token(request)
     with connect(request.app.state.database) as conn:
         row = conn.execute(
             """SELECT u.id,u.username,u.role,c.id company_id,c.name company_name,s.csrf
@@ -86,8 +96,6 @@ def current_user(request: Request, role=None, write=False):
     user = dict(row)
     if role and user["role"] != role:
         fail("当前账号无权执行此操作", 403)
-    if write and not hmac.compare_digest(request.headers.get("x-csrf-token", ""), user["csrf"]):
-        fail("请求验证失败，请刷新页面后重试", 403)
     return user
 
 

@@ -3,6 +3,7 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const all = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ACCESS_TOKEN_KEY = "bl_access_token";
 const date = stamp => stamp == null ? "—" : new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(stamp * 1000));
 const badge = (text, kind = "") => `<span class="tag ${kind}">${esc(text)}</span>`;
 const statusBadge = status => badge(status, status === "已预约" || status === "已查看" ? "green" : status === "已撤销" || status === "已失效" ? "gray" : "");
@@ -17,17 +18,22 @@ function toast(message) {
 
 async function api(path, options = {}) {
   const headers = new Headers(options.headers);
-  if (user?.csrf) headers.set("X-CSRF-Token", user.csrf);
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json"); options.body = JSON.stringify(options.body);
   }
   let response;
-  try { response = await fetch(`/api${path}`, {...options, headers, credentials:"same-origin"}); }
+  try { response = await fetch(`/api${path}`, {...options, headers, credentials:"omit"}); }
   catch { throw new Error("网络连接失败，请检查服务是否运行后重试"); }
   let data;
   try { data = await response.json(); } catch { throw new Error("服务响应异常，请稍后重试"); }
   if (!response.ok) {
-    if (response.status === 401 && user && path !== "/auth/login") { user = null; nav(); }
+    if (response.status === 401 && path !== "/auth/login") {
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      user = null;
+      nav();
+    }
     const error = new Error(data.message || "操作失败，请重试"); error.status = response.status; throw error;
   }
   return data;
@@ -69,7 +75,10 @@ function needRole(role) {
 function nav() {
   const roleLink = user?.role === "company" ? '<a href="/company">公司工作台</a>' : user?.role === "seeker" ? '<a href="/applications">我的投递</a>' : user?.role === "admin" ? '<a href="/admin">岗位管理</a>' : "";
   $("#nav").innerHTML = `<a href="/" ${location.pathname === "/" ? 'class="active"' : ""}>发现机会</a>${roleLink}${user ? `<span class="user-pill" title="${esc(user.company_name || user.username)}">${esc(user.company_name || user.username)}</span><button class="text-button" id="logout">退出</button>` : '<a href="/login">登录</a><a class="btn small" href="/register">免费注册 ↗</a>'}`;
-  if (user) action($("#logout"), async () => { await api("/auth/logout", {method:"POST"}); location.href = "/"; });
+  if (user) action($("#logout"), async () => {
+    try { await api("/auth/logout", {method:"POST"}); }
+    finally { localStorage.removeItem(ACCESS_TOKEN_KEY); location.href = "/"; }
+  });
 }
 
 const steps = `<div class="step"><span>01</span><div><strong>发现合适的机会</strong><p>浏览真实招聘，与值得奔赴的公司相遇。</p></div></div><div class="step"><span>02</span><div><strong>让简历替你说话</strong><p>上传 PDF 或 Word，迈出下一步。</p></div></div><div class="step"><span>03</span><div><strong>赴一场新的可能</strong><p>收到公司邀请，预约你的见面时间。</p></div></div>`;
@@ -103,6 +112,7 @@ async function authPage(register) {
       sessionStorage.setItem("flash", "注册成功，请登录"); location.href = "/login";
     } else {
       const result = await api("/auth/login", {method:"POST", body:{username:data.get("username"),password:data.get("password")}});
+      localStorage.setItem(ACCESS_TOKEN_KEY, result.access_token);
       location.href = next && /^\/(?!\/)/.test(next) ? next : result.role === "company" ? "/company" : result.role === "admin" ? "/admin" : "/";
     }
   });

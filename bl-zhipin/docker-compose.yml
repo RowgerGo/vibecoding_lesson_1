@@ -10,7 +10,6 @@ services:
       - "${BL_PORT:-8000}:8000"
     environment:
       BL_PUBLIC_URL: "${BL_PUBLIC_URL:-http://8.166.120.57:8000}"
-      BL_SECURE_COOKIE: "${BL_SECURE_COOKIE:-0}"
       BL_DATA_DIR: "/app/data"
     volumes:
       - bl_zhipin_data:/app/data

@@ -1,10 +1,10 @@
 import secrets
 import sqlite3
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request
 
 from .common import (Input, current_user, fail, normalized, now, password_hash,
-                     password_matches, text, token_hash)
+                     password_matches, request_token, text, token_hash)
 from .db import connect
 
 router = APIRouter(prefix="/api/auth")
@@ -46,21 +46,25 @@ def register(body: Register, request: Request):
 
 
 @router.post("/login")
-def login(body: Login, request: Request, response: Response):
+def login(body: Login, request: Request):
     with connect(request.app.state.database) as conn:
         user = conn.execute("SELECT * FROM users WHERE username=?", (body.username.strip(),)).fetchone()
         if not user or not password_matches(body.password, user["password_hash"]):
             fail("用户名或密码错误", 401)
         token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         conn.execute("DELETE FROM sessions WHERE expires_at<=?", (now(request),))
-        old = request.cookies.get("bl_session")
+        old = request_token(request, required=False)
         if old:
             conn.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash(old),))
         conn.execute("INSERT INTO sessions VALUES(?,?,?,?)",
                      (token_hash(token), user["id"], csrf, now(request) + 7 * 86400))
-    response.set_cookie("bl_session", token, httponly=True, samesite="lax",
-                        secure=request.app.state.secure_cookie, max_age=7 * 86400)
-    return {"message": "登录成功", "csrf": csrf, "role": user["role"]}
+    return {
+        "message": "登录成功",
+        "access_token": token,
+        "token_type": "Bearer",
+        "expires_in": 7 * 86400,
+        "role": user["role"],
+    }
 
 
 @router.get("/me")
@@ -69,10 +73,9 @@ def me(request: Request):
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response):
+def logout(request: Request):
     current_user(request, write=True)
     with connect(request.app.state.database) as conn:
         conn.execute("DELETE FROM sessions WHERE token_hash=?",
-                     (token_hash(request.cookies["bl_session"]),))
-    response.delete_cookie("bl_session")
+                     (token_hash(request_token(request)),))
     return {"message": "已退出登录"}

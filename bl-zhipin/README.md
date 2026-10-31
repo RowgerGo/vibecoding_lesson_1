@@ -21,10 +21,9 @@ curl http://127.0.0.1:8000/api/health
 ```dotenv
 BL_PORT=8000
 BL_PUBLIC_URL=http://服务器地址:8000
-BL_SECURE_COOKIE=0
 ```
 
-如果前面使用 Nginx 或其他反向代理提供 HTTPS，应将 `BL_PUBLIC_URL` 设置为浏览器实际访问的 HTTPS 地址，并将 `BL_SECURE_COOKIE=1`；代理需要转发 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`。
+如果前面使用 Nginx 或其他反向代理提供 HTTPS，应将 `BL_PUBLIC_URL` 设置为浏览器实际访问的 HTTPS 地址；代理需要转发 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`。
 
 查看日志使用 `docker compose logs -f bl-zhipin`，停止服务使用 `docker compose down`。不要使用 `docker compose down -v`，否则会删除数据库和简历。
 
@@ -105,7 +104,6 @@ bl-zhipin/
 | --- | --- | --- |
 | `BL_DATA_DIR` | 数据库存储与简历目录，建议使用绝对路径 | 项目内 `data/` |
 | `BL_PUBLIC_URL` | 公司复制的邀请链接使用的完整服务地址 | 当前请求的访问地址 |
-| `BL_SECURE_COOKIE` | 通过 HTTPS 访问时设为 `1`，启用 Secure 会话 Cookie | `0`，用于本地 HTTP |
 
 初始化管理员与启动服务时，应使用相同的 `BL_DATA_DIR`。
 
@@ -134,7 +132,9 @@ Python 测试使用临时数据库和上传目录，不连接默认 `data/`。Wo
 
 ## 主要 API
 
-写操作使用 JSON，简历投递使用 `multipart/form-data`。登录返回会话 Cookie，`GET /api/auth/me` 返回当前账号与 CSRF 凭证；登录后的写请求应携带 `X-CSRF-Token`。公开邀请预约无需账号或会话。
+写操作使用 JSON，简历投递使用 `multipart/form-data`。登录成功后 API 返回短期 `access_token`，前端存入浏览器 `localStorage` 的 `bl_access_token`；后续 API 请求通过 `Authorization: Bearer <access_token>` 发送。退出登录或服务端会话失效后，前端清除本地票据并回到未登录状态。公开邀请预约无需账号或票据。
+
+票据不写入 Cookie；前端必须通过同源页面脚本读取并发送，页面继续使用 CSP 和文本转义保护动态内容。
 
 完整接口契约由 `GET /api/openapi.json` 提供，无需加载外部 CDN 资源。
 
