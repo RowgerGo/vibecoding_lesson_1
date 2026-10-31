@@ -24,6 +24,8 @@ BL_PUBLIC_URL=http://服务器地址:8000
 BL_SECURE_COOKIE=0
 ```
 
+如果前面使用 Nginx 或其他反向代理提供 HTTPS，应将 `BL_PUBLIC_URL` 设置为浏览器实际访问的 HTTPS 地址，并将 `BL_SECURE_COOKIE=1`；代理需要转发 `Host`、`X-Forwarded-Host` 和 `X-Forwarded-Proto`。
+
 查看日志使用 `docker compose logs -f bl-zhipin`，停止服务使用 `docker compose down`。不要使用 `docker compose down -v`，否则会删除数据库和简历。
 
 建议使用 Python 3.13。项目使用的依赖版本固定在 `requirements.txt`，其中包含验收测试工具。

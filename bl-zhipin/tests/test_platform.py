@@ -66,6 +66,20 @@ def test_login_logout_csrf_and_fixed_role(env):
     assert env.client().post("/api/auth/login", json={"username":"seeker","password":PASSWORD}, headers={"Origin":"http://testserver.evil.invalid"}).status_code == 403
 
 
+def test_https_reverse_proxy_origin_is_allowed(env):
+    response = env.client().post(
+        "/api/auth/login",
+        json={"username":"seeker", "password":"incorrect"},
+        headers={
+            "Origin":"https://zhipin.1024web.cn",
+            "X-Forwarded-Proto":"https",
+            "X-Forwarded-Host":"zhipin.1024web.cn",
+        },
+    )
+    # 来源校验通过后才会进入账号校验；错误密码应得到 401，而不是跨站 403。
+    assert response.status_code == 401
+
+
 def test_position_management_and_role_isolation(env):
     admin = env.client("admin")
     created = admin.post("/api/admin/positions", json={"name":" Designer "})

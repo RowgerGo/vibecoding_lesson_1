@@ -93,10 +93,20 @@ def current_user(request: Request, role=None, write=False):
 
 def ensure_same_origin(request):
     origin = request.headers.get("origin")
-    if origin and origin != str(request.base_url).rstrip("/"):
-        # 不信任仅在文本中包含本地主机名的来源。
-        if urlsplit(origin).netloc != request.url.netloc or urlsplit(origin).scheme != request.url.scheme:
-            fail("不允许跨站提交", 403)
+    if not origin:
+        return
+    # 生产环境由 Nginx 终止 TLS，再把请求转发到容器内的 HTTP。
+    # 使用受控反向代理写入的头恢复浏览器看到的外部来源；直连容器时回退到请求本身。
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    expected_scheme = forwarded_proto or request.url.scheme
+    expected_host = forwarded_host or request.headers.get("host") or request.url.netloc
+    expected = f"{expected_scheme}://{expected_host}".rstrip("/")
+    # 不信任仅在文本中包含本地主机名的来源，并用结构化 URL 比较协议和主机。
+    actual = urlsplit(origin.rstrip("/"))
+    expected_url = urlsplit(expected)
+    if actual.scheme != expected_url.scheme or actual.netloc != expected_url.netloc:
+        fail("不允许跨站提交", 403)
 
 
 def future_time(value, request):
