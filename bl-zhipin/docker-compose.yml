@@ -1,0 +1,27 @@
+services:
+  bl-zhipin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bl-zhipin
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${BL_PORT:-8000}:8000"
+    environment:
+      BL_PUBLIC_URL: "${BL_PUBLIC_URL:-http://8.166.120.57:8000}"
+      BL_SECURE_COOKIE: "${BL_SECURE_COOKIE:-0}"
+      BL_DATA_DIR: "/app/data"
+    volumes:
+      - bl_zhipin_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  bl_zhipin_data:

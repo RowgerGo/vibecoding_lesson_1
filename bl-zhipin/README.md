@@ -6,6 +6,26 @@
 
 ## 安装与启动
 
+### Docker Compose 部署
+
+服务器安装 Docker 和 Docker Compose 后，在 `bl-zhipin/` 目录执行：
+
+```bash
+docker compose up -d --build
+docker compose ps
+curl http://127.0.0.1:8000/api/health
+```
+
+默认通过 `http://服务器地址:8000` 访问，SQLite 数据库和简历保存在 Docker named volume `bl_zhipin_data` 中。可通过 `.env` 覆盖端口和邀请链接：
+
+```dotenv
+BL_PORT=8000
+BL_PUBLIC_URL=http://服务器地址:8000
+BL_SECURE_COOKIE=0
+```
+
+查看日志使用 `docker compose logs -f bl-zhipin`，停止服务使用 `docker compose down`。不要使用 `docker compose down -v`，否则会删除数据库和简历。
+
 建议使用 Python 3.13。项目使用的依赖版本固定在 `requirements.txt`，其中包含验收测试工具。
 
 在仓库根目录执行：
