@@ -1,6 +1,7 @@
 "use strict";
 const $ = (selector, root = document) => root.querySelector(selector);
-const state = {user: null, csrf: "", tab: "overview", page: 1, status: "", sequence: 0};
+const AUTH_KEY = "oa_auth";
+const state = {user: null, csrf: "", accessToken: "", tab: "overview", page: 1, status: "", sequence: 0};
 const roles = {admin: "系统管理员", head: "部门负责人", user: "普通用户"};
 const statuses = {pending: "待审核", approved: "已同意", rejected: "已拒绝"};
 let toastTimer;
@@ -20,6 +21,8 @@ function notify(message) {
 function showLogin() {
   state.user = null;
   state.csrf = "";
+  state.accessToken = "";
+  localStorage.removeItem(AUTH_KEY);
   state.sequence++;
   $("#workspace").hidden = true;
   $("#login-view").hidden = false;
@@ -27,10 +30,15 @@ function showLogin() {
   $("#login-form").reset();
 }
 async function api(path, options = {}) {
+  const auth = state.accessToken ? {access_token: state.accessToken, csrf_token: state.csrf} : readAuth();
+  if (auth) {
+    state.accessToken = auth.access_token;
+    state.csrf = auth.csrf_token;
+  }
   const response = await fetch(`/api${path}`, {
-    credentials: "same-origin",
+    credentials: "omit",
     ...options,
-    headers: {"Content-Type": "application/json", "X-CSRF-Token": state.csrf, ...options.headers},
+    headers: {"Content-Type": "application/json", ...(auth ? {"Authorization": `Bearer ${auth.access_token}`} : {}), "X-CSRF-Token": auth?.csrf_token || "", ...options.headers},
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const data = await response.json();
@@ -39,6 +47,15 @@ async function api(path, options = {}) {
     throw new Error(data.error?.message || "操作失败，请重试");
   }
   return data;
+}
+function readAuth() {
+  try {
+    const auth = JSON.parse(localStorage.getItem(AUTH_KEY) || "null");
+    return auth?.access_token && auth?.csrf_token ? auth : null;
+  } catch {
+    localStorage.removeItem(AUTH_KEY);
+    return null;
+  }
 }
 async function run(action, button) {
   const old = button?.textContent;
@@ -326,7 +343,9 @@ $("#login-form").addEventListener("submit", async event => {
   $("#login-error").textContent = ""; submit.disabled = true; submit.textContent = "登录中…";
   try {
     const result = await api("/auth/login", {method: "POST", body: Object.fromEntries(new FormData(form))});
-    state.user = result.user; state.csrf = result.csrf_token; form.reset();
+    state.accessToken = result.access_token; state.user = result.user; state.csrf = result.csrf_token;
+    localStorage.setItem(AUTH_KEY, JSON.stringify({access_token: result.access_token, csrf_token: result.csrf_token}));
+    form.reset();
     if (!allowedTabs().includes(location.hash.slice(1))) history.replaceState(null, "", "#overview");
     await enterWorkspace();
   } catch (error) { $("#login-error").textContent = error.message || "连接失败，请稍后重试"; }
@@ -334,7 +353,10 @@ $("#login-form").addEventListener("submit", async event => {
 });
 $("#logout").addEventListener("click", event => run(async () => { await api("/auth/logout", {method: "POST"}); showLogin(); }, event.currentTarget));
 run(async () => {
-  try { const result = await api("/auth/me"); state.user = result.user; state.csrf = result.csrf_token; }
+  const auth = readAuth();
+  if (!auth) { showLogin(); return; }
+  state.accessToken = auth.access_token; state.csrf = auth.csrf_token;
+  try { const result = await api("/auth/me"); state.user = result.user; state.csrf = result.csrf_token; localStorage.setItem(AUTH_KEY, JSON.stringify({access_token: state.accessToken, csrf_token: state.csrf})); }
   catch { showLogin(); return; }
   await enterWorkspace();
 });

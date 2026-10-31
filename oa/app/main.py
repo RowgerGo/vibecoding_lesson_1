@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -132,7 +132,10 @@ def create_app(db_path=None, *, session_seconds=None):
         return response
 
     def current(request: Request):
-        token = request.cookies.get("oa_session", "")
+        authorization = request.headers.get("Authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token or " " in token:
+            fail(401, "请先登录，或登录已过期")
         with connection(path) as db:
             session = db.execute("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?", (token_hash(token), int(time.time()))).fetchone()
             if not session:
@@ -171,7 +174,7 @@ def create_app(db_path=None, *, session_seconds=None):
         return {"status": "ok"}
 
     @app.post("/api/auth/login")
-    def login(body: schemas.Login, response: Response):
+    def login(body: schemas.Login):
         with connection(path, write=True) as db:
             row = db.execute("SELECT * FROM users WHERE username=?", (body.username,)).fetchone()
             if not row or not verify_password(body.password, row["password_hash"]) or not row["enabled"]:
@@ -180,29 +183,27 @@ def create_app(db_path=None, *, session_seconds=None):
             db.execute("DELETE FROM sessions WHERE expires_at<=?", (int(time.time()),))
             db.execute("INSERT INTO sessions VALUES(?,?,?,?)", (token_hash(token), row["id"], csrf, int(time.time()) + ttl))
             user = user_view(db.execute(USER_SQL + " WHERE u.id=?", (row["id"],)).fetchone())
-        response.set_cookie("oa_session", token, max_age=ttl, httponly=True, samesite="strict", secure=os.getenv("OA_COOKIE_SECURE") == "1", path="/")
-        return {"user": user, "csrf_token": csrf}
+        return {"access_token": token, "token_type": "Bearer", "user": user, "csrf_token": csrf, "expires_in": ttl}
 
     @app.get("/api/auth/me")
     def me(request: Request, user=Depends(current)):
         return {"user": user, "csrf_token": request.state.csrf_token}
 
     @app.post("/api/auth/logout")
-    def logout(request: Request, response: Response, user=Depends(current)):
+    def logout(request: Request, user=Depends(current)):
+        _, _, token = request.headers.get("Authorization", "").partition(" ")
         with connection(path, write=True) as db:
-            db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash(request.cookies.get("oa_session", "")),))
-        response.delete_cookie("oa_session", path="/")
+            db.execute("DELETE FROM sessions WHERE token_hash=?", (token_hash(token),))
         return {"message": "已退出登录"}
 
     @app.post("/api/auth/password")
-    def change_password(body: schemas.ChangePassword, response: Response, user=Depends(current)):
+    def change_password(body: schemas.ChangePassword, user=Depends(current)):
         with connection(path, write=True) as db:
             row = db.execute("SELECT password_hash FROM users WHERE id=?", (user["id"],)).fetchone()
             if not verify_password(body.old_password, row["password_hash"]):
                 fail(422, "原密码错误")
             db.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(body.new_password), user["id"]))
             db.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
-        response.delete_cookie("oa_session", path="/")
         return {"message": "密码已修改，请重新登录"}
 
     @app.get("/api/departments")

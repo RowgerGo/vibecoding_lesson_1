@@ -72,6 +72,8 @@ def test_complete_browser_workflow(running_server, tmp_path):
             page.get_by_label("密码", exact=True).fill(PASSWORD)
             page.get_by_role("button", name="登录 →", exact=True).click()
             expect(page.get_by_role("heading", name="最近申请")).to_be_visible()
+            stored_auth = page.evaluate("JSON.parse(localStorage.getItem('oa_auth'))")
+            assert stored_auth["access_token"] and stored_auth["csrf_token"]
             return page
 
         def toast(page, text):
@@ -210,6 +212,7 @@ def test_complete_browser_workflow(running_server, tmp_path):
             expect(member.get_by_role("heading", name="账户设置", exact=True)).to_be_visible()
             member.get_by_role("button", name="退出登录", exact=True).click()
             expect(member.get_by_role("heading", name="登录工作空间")).to_be_visible()
+            assert member.evaluate("localStorage.getItem('oa_auth')") is None
 
             # 手机尺寸布局与分页/状态筛选。
             finance.set_viewport_size({"width": 390, "height": 844})
@@ -233,12 +236,12 @@ def test_real_process_restart_and_backup_restore(tmp_path):
     create_admin(database, "admin", "持久化验收管理员", PASSWORD)
     with serve(database, tmp_path) as base, httpx.Client(base_url=base) as client:
         result = client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD}).json()
-        client.headers["X-CSRF-Token"] = result["csrf_token"]
+        client.headers.update({"Authorization": f"Bearer {result['access_token']}", "X-CSRF-Token": result["csrf_token"]})
         department = client.post("/api/departments", json={"name": "持久化部门"}).json()["id"]
         user = client.post("/api/users", json={"username": "reviewer", "name": "持久化负责人", "password": PASSWORD, "department_id": department}).json()["id"]
         assert client.put(f"/api/departments/{department}/head", json={"user_id": user}).status_code == 200
         result = client.post("/api/auth/login", json={"username": "reviewer", "password": PASSWORD}).json()
-        client.headers["X-CSRF-Token"] = result["csrf_token"]
+        client.headers.update({"Authorization": f"Bearer {result['access_token']}", "X-CSRF-Token": result["csrf_token"]})
         created = client.post("/api/applications", json={"title": "重启与恢复验收", "content": "测试原始内容", "event_date": "2026-10-30", "approval_department_id": department})
         assert created.status_code == 201
         application_id = created.json()["id"]
@@ -253,7 +256,11 @@ def test_real_process_restart_and_backup_restore(tmp_path):
         with serve(source, tmp_path) as base, httpx.Client(base_url=base) as client:
             result = client.post("/api/auth/login", json={"username": "reviewer", "password": PASSWORD})
             assert result.status_code == 200
+            body = result.json()
+            client.headers.update({"Authorization": f"Bearer {body['access_token']}", "X-CSRF-Token": body["csrf_token"]})
             assert client.get(f"/api/applications/{application_id}").json() == expected
-            client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD})
+            result = client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD})
+            body = result.json()
+            client.headers.update({"Authorization": f"Bearer {body['access_token']}", "X-CSRF-Token": body["csrf_token"]})
             assert len(client.get("/api/users").json()["items"]) == 2
             assert client.get("/api/departments").json()["items"][0]["head_user_id"] == user

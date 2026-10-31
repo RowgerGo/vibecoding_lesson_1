@@ -37,18 +37,29 @@ def test_login_cookie_logout_and_session_expiry(world):
     response = actor.get("/auth/me")
     assert response.status_code == 200
     assert "password_hash" not in response.text and "token_hash" not in response.text
-    raw_cookie = actor.client.cookies.get("oa_session")
+    assert actor.client.cookies.get("oa_session") is None
+    assert actor.access_token
     with TestClient(world["app"]) as client:
         login = client.post("/api/auth/login", json={"username": "user", "password": PASSWORD})
-        cookie = login.headers["set-cookie"].lower()
-        assert "httponly" in cookie and "samesite=strict" in cookie
+        body = login.json()
+        assert body["token_type"] == "Bearer" and body["access_token"]
+        assert "set-cookie" not in login.headers
+        client.headers.update({"Authorization": f"Bearer {body['access_token']}", "X-CSRF-Token": body["csrf_token"]})
         assert client.post("/api/auth/login", json={"username": "user", "password": "wrong"}).status_code == 401
     assert actor.post("/auth/logout").status_code == 200
-    actor.client.cookies.set("oa_session", raw_cookie)
     assert actor.get("/auth/me").status_code == 401
     with TestClient(create_app(world["path"], session_seconds=-1)) as client:
-        assert client.post("/api/auth/login", json={"username": "user", "password": PASSWORD}).status_code == 200
+        result = client.post("/api/auth/login", json={"username": "user", "password": PASSWORD}).json()
+        client.headers.update({"Authorization": f"Bearer {result['access_token']}", "X-CSRF-Token": result["csrf_token"]})
         assert client.get("/api/auth/me").status_code == 401
+
+
+def test_bearer_token_required_and_cookie_is_not_accepted(world):
+    actor = world["actor"]("user")
+    actor.client.headers.pop("Authorization")
+    assert actor.get("/auth/me").status_code == 401
+    actor.client.cookies.set("oa_session", actor.access_token)
+    assert actor.get("/auth/me").status_code == 401
 
 
 def test_csrf_and_cross_origin_protection(world):
@@ -62,7 +73,7 @@ def test_same_host_origin_without_non_default_port_is_allowed(world):
     with TestClient(world["app"], base_url="http://testserver:8000") as client:
         login = client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD})
         assert login.status_code == 200
-        client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
+        client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}", "X-CSRF-Token": login.json()["csrf_token"]})
         response = client.post("/api/departments", json={"name": "省略端口同源"}, headers={"Origin": "http://testserver"})
         assert response.status_code == 201
         assert client.post("/api/departments", json={"name": "错误端口"}, headers={"Origin": "http://testserver:9000"}).status_code == 403
@@ -73,7 +84,7 @@ def test_configured_public_origin_allows_https_proxy_origin(world, monkeypatch):
     with TestClient(world["app"], base_url="http://container:8000") as client:
         login = client.post("/api/auth/login", json={"username": "admin", "password": PASSWORD})
         assert login.status_code == 200
-        client.headers["X-CSRF-Token"] = login.json()["csrf_token"]
+        client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}", "X-CSRF-Token": login.json()["csrf_token"]})
         assert client.post("/api/departments", json={"name": "代理同源"}, headers={"Origin": "https://oa.example.test"}).status_code == 201
         assert client.post("/api/departments", json={"name": "错误来源"}, headers={"Origin": "https://evil.example"}).status_code == 403
 

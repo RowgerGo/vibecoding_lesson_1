@@ -142,7 +142,7 @@ oa/
 
 请求和响应使用 JSON。错误响应统一为 `{"error":{"code":422,"message":"说明"}}`，参数校验错误另带字段列表。未登录为 401，无权限为 403，不存在或无权查看的申请详情为 404，业务冲突为 409，输入不合法为 422。
 
-登录成功后由 HttpOnly Cookie 维持会话，响应中的 `csrf_token` 用于写请求的 `X-CSRF-Token` 请求头；`GET /api/auth/me` 可恢复当前身份及 CSRF 令牌。密码修改、重置、账号停用会使该用户已有会话失效。页面和 API 同源部署。
+登录成功后，API 返回 `access_token` 和 `csrf_token`。前端将两者保存在浏览器 `localStorage` 的 `oa_auth` 项中，后续请求使用 `Authorization: Bearer <access_token>` 和 `X-CSRF-Token` 请求头；`GET /api/auth/me` 可恢复当前身份。页面请求不携带 Cookie，退出登录或会话失效时会清理本地票据。密码修改、重置、账号停用会使该用户已有会话失效。页面和 API 同源部署。
 
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |

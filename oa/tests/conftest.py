@@ -17,8 +17,9 @@ class Actor:
         response = client.post("/api/auth/login", json={"username": username, "password": PASSWORD})
         assert response.status_code == 200, response.text
         self.user = response.json()["user"]
+        self.access_token = response.json()["access_token"]
         self.csrf = response.json()["csrf_token"]
-        client.headers["X-CSRF-Token"] = self.csrf
+        client.headers.update({"Authorization": f"Bearer {self.access_token}", "X-CSRF-Token": self.csrf})
 
     def get(self, path, **kwargs):
         return self.client.get("/api" + path, **kwargs)
