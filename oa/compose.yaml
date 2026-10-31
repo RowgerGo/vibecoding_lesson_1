@@ -12,6 +12,7 @@ services:
       OA_DB_PATH: /app/data/oa.sqlite3
       OA_SESSION_HOURS: ${OA_SESSION_HOURS:-12}
       OA_COOKIE_SECURE: ${OA_COOKIE_SECURE:-0}
+      OA_PUBLIC_ORIGIN: ${OA_PUBLIC_ORIGIN:-}
     volumes:
       - oa_data:/app/data
     security_opt:

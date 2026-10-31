@@ -28,11 +28,14 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | `OA_DB_PATH` | `oa/data/oa.sqlite3`，相对项目文件位置确定 | SQLite 文件路径，可使用绝对路径；默认不受启动目录影响 |
 | `OA_SESSION_HOURS` | `12` | 会话有效小时数 |
 | `OA_COOKIE_SECURE` | 未设置 | 通过 HTTPS 使用时设为 `1`，让会话 Cookie 仅经 HTTPS 发送；本机 HTTP 保持默认 |
+| `OA_PUBLIC_ORIGIN` | 未设置 | HTTPS 反向代理部署时填写浏览器访问的完整来源，例如 `https://oa.1024web.cn`，用于登录写请求的来源校验 |
 
 示例：
 
 ```bash
 export OA_DB_PATH="$PWD/data/team.sqlite3"
+export OA_PUBLIC_ORIGIN="https://oa.1024web.cn"
+export OA_COOKIE_SECURE=1
 python -m app.cli init
 python -m app.cli create-admin
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000

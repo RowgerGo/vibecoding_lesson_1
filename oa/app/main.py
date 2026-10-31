@@ -47,6 +47,23 @@ def same_origin(request: Request, origin: str) -> bool:
         return False
 
 
+def configured_origin_matches(origin: str) -> bool:
+    """在 HTTPS 反向代理后校验浏览器面对的公网来源。"""
+    expected = os.getenv("OA_PUBLIC_ORIGIN", "").strip().rstrip("/")
+    if not expected:
+        return False
+    try:
+        actual = urlsplit(origin)
+        public = urlsplit(expected)
+        if actual.scheme != public.scheme or actual.hostname != public.hostname:
+            return False
+        if actual.port is None and public.port is None:
+            return True
+        return (actual.port or (443 if actual.scheme == "https" else 80)) == (public.port or (443 if public.scheme == "https" else 80))
+    except ValueError:
+        return False
+
+
 def fail(code, message):
     raise HTTPException(code, message)
 
@@ -101,7 +118,9 @@ def create_app(db_path=None, *, session_seconds=None):
     @app.middleware("http")
     async def security_headers(request, call_next):
         origin = request.headers.get("origin")
-        if request.method not in ("GET", "HEAD", "OPTIONS") and origin and not same_origin(request, origin):
+        if request.method not in ("GET", "HEAD", "OPTIONS") and origin and not (
+            same_origin(request, origin) or configured_origin_matches(origin)
+        ):
             return JSONResponse({"error": {"code": 403, "message": "不允许跨站提交"}}, status_code=403)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
